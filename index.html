@@ -222,7 +222,14 @@
             <div class="form-group">
                 <label for="targetBak">Ce alcoolemie ai avut? Care a fost concentrația de alcool în sânge?</label>
                 <div class="input-group">
-                    <input type="number" id="targetBak" required min="0" step="0.1">
+                    <input 
+                        type="number" 
+                        id="targetBak" 
+                        min="0.01" 
+                        max="5.00" 
+                        step="0.01" 
+                        required 
+                        placeholder="Ex. 1.85">
                     <span class="unit">‰</span>
                 </div>
             </div>
@@ -245,6 +252,7 @@
     <script>
         let consumptionChart;
 
+        // 🧠 Verteilungsfaktor berechnen
         function calculateDistributionFactor(weight, height, gender) {
             if (gender === 'male') {
                 return 0.31608 - 0.004821 * weight + 0.004432 * height;
@@ -253,14 +261,15 @@
             }
         }
 
+        // 🧠 Alkoholmengen berechnen
         function calculateAlcoholVolumes(alcoholGrams) {
-            const beerAlcohol = 5; // Bere: 5% Alcool
-            const wineAlcohol = 12; // Vin: 12% Alcool
-            const spiritsAlcohol = 40; // Băuturi spirtoase: 40% Alcool
+            const beerAlcohol = 5; // Bier: 5% Alkohol
+            const wineAlcohol = 12; // Wein: 12% Alkohol
+            const spiritsAlcohol = 40; // Spirituosen: 40% Alkohol
 
-            const beerVolume = (alcoholGrams / (beerAlcohol * 0.8)) / 10; // în Litri
-            const wineVolume = (alcoholGrams / (wineAlcohol * 0.8)) / 10; // în Litri
-            const spiritsVolume = (alcoholGrams / (spiritsAlcohol * 0.8)) / 10; // în Litri
+            const beerVolume = (alcoholGrams / (beerAlcohol * 0.8)) / 10;
+            const wineVolume = (alcoholGrams / (wineAlcohol * 0.8)) / 10;
+            const spiritsVolume = (alcoholGrams / (spiritsAlcohol * 0.8)) / 10;
 
             return {
                 beerVolume: beerVolume.toFixed(2),
@@ -269,29 +278,57 @@
             };
         }
 
-        document.getElementById('alcoholForm').addEventListener('submit', function(event) {
-            event.preventDefault(); // Împiedică reîncărcarea paginii
+        const targetBakInput = document.getElementById('targetBak');
 
-            // Citește datele din formular
+        // Validierung bei Eingabe
+        targetBakInput.addEventListener('input', function () {
+            const value = parseFloat(targetBakInput.value);
+
+            if (isNaN(value) || value < 0.01 || value > 5) {
+                targetBakInput.setCustomValidity('Introduceți o valoare validă între 0.01 și 5.00, de exemplu: 1.85');
+            } else {
+                targetBakInput.setCustomValidity('');
+            }
+        });
+
+        // 🧠 Hauptberechnung und Formular-Handling
+        document.getElementById('alcoholForm').addEventListener('submit', function(event) {
+            const targetBak = parseFloat(targetBakInput.value);
+
+            if (isNaN(targetBak) || targetBak < 0.01 || targetBak > 5) {
+                event.preventDefault();
+                targetBakInput.reportValidity();
+                return;
+            }
+
+            event.preventDefault();
+
+            // Eingabewerte auslesen
             const weight = parseFloat(document.getElementById('weight').value);
             const height = parseFloat(document.getElementById('height').value);
             const gender = document.getElementById('gender').value;
             const duration = parseFloat(document.getElementById('duration').value);
-            const targetBak = parseFloat(document.getElementById('targetBak').value);
 
-            // Calculează factorul de distribuție
+            // Überprüfen, ob alle Eingaben gültig sind
+            if (isNaN(weight) || isNaN(height) || isNaN(duration) || isNaN(targetBak)) {
+                document.getElementById('errorMessages').innerText = 'Vă rugăm introduceți valori valide pentru toate câmpurile.';
+                document.getElementById('errorMessages').style.display = 'block';
+                return;
+            }
+
+            // Verteilungsfaktor berechnen
             const distributionFactor = calculateDistributionFactor(weight, height, gender);
 
-            // Calculează cantitatea de alcool în sens invers
+            // Alkoholmenge berechnen
             let alcoholGrams = (targetBak + 0.15 * duration) * (weight * distributionFactor);
-            alcoholGrams /= 0.85; // Ține cont de deficitul de absorbție (15%)
+            alcoholGrams /= 0.85; // Resorptionsdefizit berücksichtigen
 
-            // Calculează volumele de alcool în litri
+            // Alkoholvolumen berechnen
             const volumes = calculateAlcoholVolumes(alcoholGrams);
 
-            // Afișează rezultatul
+            // Ergebnisse anzeigen
             document.getElementById('result').innerHTML = `
-                <p>Pentru a atinge aproximativ ${targetBak.toFixed(2)} ‰ promilaj după ${duration} ore, ar trebui să consumați aproximativ:</p>
+                <p>Pentru a atinge aproximativ ${targetBak.toFixed(2)} ‰ concentrația de alcool în sânge după ${duration} ore, ar trebui să consumați aproximativ:</p>
                 <ul>
                     <li>${volumes.beerVolume} litri de bere</li>
                     <li>${volumes.wineVolume} litri de vin</li>
@@ -300,10 +337,10 @@
                 <p><strong>Notă importantă:</strong> Acest calcul servește doar ca orientare și nu înlocuiește o evaluare medicală sau juridică. Concentrația reală de alcool din sânge poate varia individual.</p>
             `;
 
-            // Creează datele pentru diagramă
+            // Diagrammdaten erstellen
             const timeLabels = [];
             const alcoholData = [];
-            const steps = 10; // Numărul de puncte de date
+            const steps = 10;
             for (let i = 0; i <= steps; i++) {
                 const time = (duration / steps) * i;
                 timeLabels.push(time.toFixed(1));
@@ -322,29 +359,13 @@
             const chartOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: {
-                    duration: 2000,
-                    easing: 'easeInOutQuad'
-                },
                 scales: {
                     x: {
-                        title: {
-                            display: true,
-                            text: 'Durată (ore)'
-                        }
+                        title: { display: true, text: 'Durată (ore)' }
                     },
                     y: {
-                        title: {
-                            display: true,
-                            text: 'Cantitate de alcool (g)'
-                        },
+                        title: { display: true, text: 'Cantitate de alcool (g)' },
                         min: 0
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false
                     }
                 }
             };
@@ -356,14 +377,9 @@
             const ctx = document.getElementById('consumptionChart').getContext('2d');
             consumptionChart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: timeLabels,
-                    datasets: datasets
-                },
+                data: { labels: timeLabels, datasets: datasets },
                 options: chartOptions
             });
-
-            loadingSpinner.style.display = 'none';
         });
     </script>
 </body>
